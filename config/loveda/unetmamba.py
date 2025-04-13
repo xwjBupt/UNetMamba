@@ -10,8 +10,8 @@ import copy
 # training hparam
 max_epoch = 100
 ignore_index = len(CLASSES)
-train_batch_size = 8
-val_batch_size = 1
+train_batch_size = 64
+val_batch_size = 16
 lr = 6e-4
 weight_decay = 2.5e-4
 backbone_lr = 6e-5
@@ -21,7 +21,7 @@ classes = CLASSES
 image_size = 1024
 
 weights_name = "unetmamba-"+str(image_size)+"-e"+str(max_epoch)
-weights_path = "model_weights/loveda/{}".format(weights_name)
+weights_path = "/home/wjx/data/code/UNetMamba/model_weights/loveda/{}".format(weights_name)
 test_weights_name = "last"
 log_name = 'loveda/{}'.format(weights_name)
 monitor = 'val_mIoU'
@@ -112,7 +112,7 @@ def train_aug(img, mask):
     return img, mask
 
 
-train_dataset = LoveDATrainDataset(transform=train_aug, data_root='data/LoveDA/train_val')
+train_dataset = LoveDATrainDataset(transform=train_aug)
 
 val_dataset = loveda_val_dataset
 

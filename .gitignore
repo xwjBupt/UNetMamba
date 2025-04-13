@@ -1,0 +1,10 @@
+*.pyc
+*.ckpt
+*.pth
+*.o
+*.so
+*.egg
+lightning_logs/*
+unetmamba_model/*
+*.whl
+r*.txt

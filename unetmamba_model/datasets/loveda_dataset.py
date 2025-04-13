@@ -67,7 +67,7 @@ def val_aug(img, mask):
 
 
 class LoveDATrainDataset(Dataset):
-    def __init__(self, data_root='data/LoveDA/Train', img_dir='images_png', mosaic_ratio=0.25,
+    def __init__(self, data_root='/home/wjx/data/dataset/RSS/loveDA/Train', img_dir='images_png', mosaic_ratio=0.25,
                  mask_dir='masks_png_convert', img_suffix='.png', mask_suffix='.png',
                  transform=train_aug, img_size=ORIGIN_IMG_SIZE):
         self.data_root = data_root
@@ -179,12 +179,12 @@ class LoveDATrainDataset(Dataset):
         return img, mask
 
 
-loveda_val_dataset = LoveDATrainDataset(data_root='data/LoveDA/Val', mosaic_ratio=0.0,
+loveda_val_dataset = LoveDATrainDataset(data_root='/home/wjx/data/dataset/RSS/loveDA/Val', mosaic_ratio=0.0,
                                         transform=val_aug)
 
 
 class LoveDATestDataset(Dataset):
-    def __init__(self, data_root='data/LoveDA/Test', img_dir='images_png',
+    def __init__(self, data_root='/home/wjx/data/dataset/RSS/loveDA/Test', img_dir='images_png',
                  img_suffix='.png',  mosaic_ratio=0.0,
                  img_size=ORIGIN_IMG_SIZE):
         self.data_root = data_root

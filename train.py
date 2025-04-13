@@ -11,7 +11,7 @@ from pathlib import Path
 from tools.metric import Evaluator
 from pytorch_lightning.loggers import CSVLogger
 import random
-
+os.environ["CUDA_VISIBLE_DEVICES"] = '3'
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 def seed_everything(seed):
