@@ -10,3 +10,4 @@ unetmamba_model/*
 r*.txt
 *.png
 fig_results/*
+nohup.out

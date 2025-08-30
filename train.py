@@ -13,7 +13,7 @@ from pytorch_lightning.loggers import CSVLogger
 import random
 from loguru import logger
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 

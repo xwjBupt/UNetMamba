@@ -10,6 +10,7 @@ import numpy as np
 import torch
 
 root = "/home/wjx/data/code/UNetMamba"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 # training hparam
 max_epoch = 100
@@ -25,12 +26,13 @@ classes = CLASSES
 image_size = 1024
 crop_size = int(512 * float(image_size / 1024))
 
-weights_name = "unetmamba-" + str(image_size) + "-e" + str(max_epoch)
+
+desc = "PerceptualMambaLossInDynamicScaling"
+weights_name = "unetmamba-" + str(image_size) + "-e" + str(max_epoch) + "-" + desc
+log_name = "vaihingen/{}".format(weights_name)
 weights_path = "/home/wjx/data/code/UNetMamba/model_weights/vaihingen/{}".format(
     weights_name
 )
-test_weights_name = "unetmamba-" + str(image_size) + "-e" + str(max_epoch)
-log_name = "vaihingen/{}".format(weights_name)
 monitor = "val_mIoU"
 monitor_mode = "max"
 save_top_k = 1

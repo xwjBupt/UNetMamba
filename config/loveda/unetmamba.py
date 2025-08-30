@@ -8,22 +8,23 @@ from fvcore.nn import flop_count, parameter_count
 import copy
 import os
 
-
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 root = "/home/wjx/data/code/UNetMamba"
 # training hparam
 max_epoch = 100
 ignore_index = len(CLASSES)
-train_batch_size = 8
-val_batch_size = 8
+train_batch_size = 32
+val_batch_size = 48
 lr = 6e-4
 weight_decay = 2.5e-4
 backbone_lr = 6e-5
 backbone_weight_decay = 2.5e-4
 num_classes = len(CLASSES)
 classes = CLASSES
-image_size = 256
+image_size = 1024
 
-weights_name = "unetmamba-" + str(image_size) + "-e" + str(max_epoch)
+desc = "PerceptualMambaLossInDynamicScaling"
+weights_name = "unetmamba-" + str(image_size) + "-e" + str(max_epoch) + "-" + desc
 weights_path = "/home/wjx/data/code/UNetMamba/model_weights/loveda/{}".format(
     weights_name
 )
