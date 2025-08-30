@@ -6,19 +6,28 @@ from torch import Tensor
 from .soft_ce import SoftCrossEntropyLoss
 from .joint_loss import JointLoss
 from .dice import DiceLoss
+from torchmetrics import MultiScaleStructuralSimilarityIndexMeasure
+import torch
+from torchvision import models, transforms
 
 
 class EdgeLoss(nn.Module):
     def __init__(self, ignore_index=6, edge_factor=1.0):
         super(EdgeLoss, self).__init__()
-        self.main_loss = JointLoss(SoftCrossEntropyLoss(smooth_factor=0.05, ignore_index=ignore_index),
-                                   DiceLoss(smooth=0.05, ignore_index=ignore_index), (1.0, 1.0))
+        self.main_loss = JointLoss(
+            SoftCrossEntropyLoss(smooth_factor=0.05, ignore_index=ignore_index),
+            DiceLoss(smooth=0.05, ignore_index=ignore_index),
+            (1.0, 1.0),
+        )
         self.edge_factor = edge_factor
 
     def get_boundary(self, x):
-        laplacian_kernel_target = torch.tensor(
-            [-1, -1, -1, -1, 8, -1, -1, -1, -1],
-            dtype=torch.float32).reshape(1, 1, 3, 3).requires_grad_(False).cuda(device=x.device)
+        laplacian_kernel_target = (
+            torch.tensor([-1, -1, -1, -1, 8, -1, -1, -1, -1], dtype=torch.float32)
+            .reshape(1, 1, 3, 3)
+            .requires_grad_(False)
+            .cuda(device=x.device)
+        )
         x = x.unsqueeze(1).float()
         x = F.conv2d(x, laplacian_kernel_target, padding=1)
         x = x.clamp(min=0)
@@ -46,7 +55,10 @@ class EdgeLoss(nn.Module):
         return edge_loss
 
     def forward(self, logits, targets):
-        loss = (self.main_loss(logits, targets) + self.compute_edge_loss(logits, targets) * self.edge_factor) / (self.edge_factor+1)
+        loss = (
+            self.main_loss(logits, targets)
+            + self.compute_edge_loss(logits, targets) * self.edge_factor
+        ) / (self.edge_factor + 1)
         return loss
 
 
@@ -54,9 +66,11 @@ class OHEM_CELoss(nn.Module):
 
     def __init__(self, thresh=0.7, ignore_index=6):
         super(OHEM_CELoss, self).__init__()
-        self.thresh = -torch.log(torch.tensor(thresh, requires_grad=False, dtype=torch.float)).cuda()
+        self.thresh = -torch.log(
+            torch.tensor(thresh, requires_grad=False, dtype=torch.float)
+        ).cuda()
         self.ignore_index = ignore_index
-        self.criteria = nn.CrossEntropyLoss(ignore_index=ignore_index, reduction='none')
+        self.criteria = nn.CrossEntropyLoss(ignore_index=ignore_index, reduction="none")
 
     def forward(self, logits, labels):
         n_min = labels[labels != self.ignore_index].numel() // 16
@@ -71,21 +85,156 @@ class UnetMambaLoss(nn.Module):
 
     def __init__(self, ignore_index=6):
         super().__init__()
-        self.main_loss = JointLoss(SoftCrossEntropyLoss(smooth_factor=0.05, ignore_index=ignore_index),
-                                   DiceLoss(smooth=0.05, ignore_index=ignore_index), (1.0, 1.0))
-        self.aux_loss = SoftCrossEntropyLoss(smooth_factor=0.05, ignore_index=ignore_index)
+        self.main_loss = JointLoss(
+            SoftCrossEntropyLoss(smooth_factor=0.05, ignore_index=ignore_index),
+            DiceLoss(smooth=0.05, ignore_index=ignore_index),
+            (1.0, 1.0),
+        )
+        self.aux_loss = SoftCrossEntropyLoss(
+            smooth_factor=0.05, ignore_index=ignore_index
+        )
 
     def forward(self, logits, labels):
         if self.training and len(logits) == 2:
             logit_main, logit_aux = logits
-            loss = self.main_loss(logit_main, labels) + 0.4 * self.aux_loss(logit_aux, labels)
+            loss = self.main_loss(logit_main, labels) + 0.4 * self.aux_loss(
+                logit_aux, labels
+            )
         else:
             loss = self.main_loss(logits, labels)
 
         return loss
 
 
-if __name__ == '__main__':
+class PerceptualMambaLoss(nn.Module):
+
+    def __init__(self, ignore_index=6, vggweight=0.0005, aux_weight=0.4):
+        super().__init__()
+        self.main_loss = JointLoss(
+            SoftCrossEntropyLoss(smooth_factor=0.05, ignore_index=ignore_index),
+            DiceLoss(smooth=0.05, ignore_index=ignore_index),
+            (1.0, 1.0),
+        )
+        self.aux_loss = AUXPercetualLoss(vggweight=vggweight, ignore_index=ignore_index)
+        self.aux_weight = aux_weight
+
+    def forward(self, logits, labels):
+        if self.training and len(logits) == 2:
+            logit_main, logit_aux = logits
+            loss = self.main_loss(logit_main, labels) + self.aux_weight * self.aux_loss(
+                logit_aux, labels
+            )
+        else:
+            loss = self.main_loss(logits, labels)
+
+        return loss
+
+
+class AUXPercetualLoss(nn.Module):
+    def __init__(self, vggweight=0.005, ignore_index=6):
+        super().__init__()
+        self.ssim = MultiScaleStructuralSimilarityIndexMeasure().cuda()
+        self.vggloss = VGGLoss()
+        self.vggweight = vggweight
+        self.ignore_index = ignore_index
+
+    def forward(self, logits, labels):
+        log_prob_hot = torch.argmax(F.log_softmax(logits, dim=1), dim=1)
+        labels = torch.where(labels == self.ignore_index, 0, labels)
+        log_prob_hot = torch.where(log_prob_hot == self.ignore_index, 0, log_prob_hot)
+        log_prob_hot = torch.cat(
+            [
+                log_prob_hot.unsqueeze(1),
+                log_prob_hot.unsqueeze(1),
+                log_prob_hot.unsqueeze(1),
+            ],
+            dim=1,
+        ).float()
+        labels = torch.cat(
+            [
+                labels.unsqueeze(1),
+                labels.unsqueeze(1),
+                labels.unsqueeze(1),
+            ],
+            dim=1,
+        ).float()
+        ssimloss = 1 - self.ssim(log_prob_hot, labels)
+        vggloss = self.vggloss(log_prob_hot, labels)
+
+        weight_ssim = vggloss / (ssimloss + vggloss)
+        weight_vgg = ssimloss / (ssimloss + vggloss)
+
+        loss = weight_ssim * ssimloss + weight_vgg * vggloss
+        return loss
+
+
+class VGGLoss(nn.Module):
+    """Computes the VGG perceptual loss between two batches of images.
+
+    The input and target must be 4D tensors with three channels
+    ``(B, 3, H, W)`` and must have equivalent shapes. Pixel values should be
+    normalized to the range 0–1.
+
+    The VGG perceptual loss is the mean squared difference between the features
+    computed for the input and target at layer :attr:`layer` (default 8, or
+    ``relu2_2``) of the pretrained model specified by :attr:`model` (either
+    ``'vgg16'`` (default) or ``'vgg19'``).
+
+    If :attr:`shift` is nonzero, a random shift of at most :attr:`shift`
+    pixels in both height and width will be applied to all images in the input
+    and target. The shift will only be applied when the loss function is in
+    training mode, and will not be applied if a precomputed feature map is
+    supplied as the target.
+
+    :attr:`reduction` can be set to ``'mean'``, ``'sum'``, or ``'none'``
+    similarly to the loss functions in :mod:`torch.nn`. The default is
+    ``'mean'``.
+
+    :meth:`get_features()` may be used to precompute the features for the
+    target, to speed up the case where inputs are compared against the same
+    target over and over. To use the precomputed features, pass them in as
+    :attr:`target` and set :attr:`target_is_features` to :code:`True`.
+
+    Instances of :class:`VGGLoss` must be manually converted to the same
+    device and dtype as their inputs.
+    """
+
+    models = {"vgg16": models.vgg16, "vgg19": models.vgg19}
+
+    def __init__(self, model="vgg16", layer=8, shift=0, reduction="mean"):
+        super().__init__()
+        self.shift = shift
+        self.reduction = reduction
+        self.normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+        )
+        self.model = self.models[model](pretrained=True).features[: layer + 1]
+        self.model.eval()
+        self.model.requires_grad_(False)
+
+    def get_features(self, input):
+        return self.model(self.normalize(input))
+
+    def train(self, mode=True):
+        self.training = mode
+
+    def forward(self, input, target, target_is_features=False):
+        if target_is_features:
+            input_feats = self.get_features(input)
+            target_feats = target
+        else:
+            sep = input.shape[0]
+            batch = torch.cat([input, target])
+            if self.shift and self.training:
+                padded = F.pad(batch, [self.shift] * 4, mode="replicate")
+                batch = transforms.RandomCrop(batch.shape[2:])(padded)
+            feats = self.get_features(batch)
+            input_feats, target_feats = feats[:sep], feats[sep:]
+            loss = F.mse_loss(input_feats, target_feats, reduction=self.reduction)
+        return loss
+
+
+if __name__ == "__main__":
     targets = torch.randint(low=0, high=2, size=(2, 16, 16))
     logits = torch.randn((2, 2, 16, 16))
     # print(targets)

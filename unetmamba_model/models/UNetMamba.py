@@ -282,7 +282,7 @@ class UNetMamba(nn.Module):
                  pretrained,
                  decode_channels=64,
                  # backbone_name="resnet18",
-                 backbone_path='pretrain_weights/rest_lite.pth',
+                 backbone_path='/home/wjx/data/code/UNetMamba/pretrain_weights/rest_lite.pth',
                  embed_dim=64,
                  num_classes=6,
                  **kwargs
@@ -303,7 +303,7 @@ class UNetMamba(nn.Module):
         if self.training:
             x, lsm = self.decoder(outputs, h, w)
             return x, lsm
-
+        
         else:
             x = self.decoder(outputs, h, w)
             return x

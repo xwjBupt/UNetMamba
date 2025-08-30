@@ -13,15 +13,15 @@ root = "/home/wjx/data/code/UNetMamba"
 # training hparam
 max_epoch = 100
 ignore_index = len(CLASSES)
-train_batch_size = 48
-val_batch_size = 32
+train_batch_size = 8
+val_batch_size = 8
 lr = 6e-4
 weight_decay = 2.5e-4
 backbone_lr = 6e-5
 backbone_weight_decay = 2.5e-4
 num_classes = len(CLASSES)
 classes = CLASSES
-image_size = 1024
+image_size = 256
 
 weights_name = "unetmamba-" + str(image_size) + "-e" + str(max_epoch)
 weights_path = "/home/wjx/data/code/UNetMamba/model_weights/loveda/{}".format(
@@ -96,7 +96,10 @@ net = UNetMamba(
 )
 
 # define the loss
-loss = UnetMambaLoss(ignore_index=ignore_index)
+# loss = UnetMambaLoss(ignore_index=ignore_index)
+
+loss = PerceptualMambaLoss(ignore_index=ignore_index, aux_weight=0.4)
+
 use_aux_loss = True
 
 # define the dataloader

@@ -13,7 +13,7 @@ from pytorch_lightning.loggers import CSVLogger
 import random
 from loguru import logger
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 
@@ -30,7 +30,13 @@ def seed_everything(seed):
 def get_args():
     parser = argparse.ArgumentParser()
     arg = parser.add_argument
-    arg("-c", "--config_path", type=Path, help="Path to the config.", required=True)
+    arg(
+        "-c",
+        "--config_path",
+        type=Path,
+        help="Path to the config.",
+        default="/home/wjx/data/code/UNetMamba/config/loveda/unetmamba.py",
+    )
     return parser.parse_args()
 
 
