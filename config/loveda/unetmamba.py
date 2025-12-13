@@ -8,26 +8,28 @@ from fvcore.nn import flop_count, parameter_count
 import copy
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 root = "/home/wjx/data/code/UNetMamba"
 # training hparam
 max_epoch = 100
 ignore_index = len(CLASSES)
-train_batch_size = 32
-val_batch_size = 48
+train_batch_size = 16
+val_batch_size = 32
 lr = 6e-4
 weight_decay = 2.5e-4
 backbone_lr = 6e-5
 backbone_weight_decay = 2.5e-4
 num_classes = len(CLASSES)
 classes = CLASSES
-image_size = 1024
+image_size = 384
 
-desc = "PerceptualMambaLossInDynamicScaling"
+desc = "Train_for_show_3796"
+data_root = "/home/wjx/data/dataset/RSS/loveDA/Train-3796"
 weights_name = "unetmamba-" + str(image_size) + "-e" + str(max_epoch) + "-" + desc
 weights_path = "/home/wjx/data/code/UNetMamba/model_weights/loveda/{}".format(
     weights_name
 )
+test_weights_path = "/home/wjx/data/code/UNetMamba/model_weights/loveda/unetmamba-384-e100-Train_for_show_3796/unetmamba-384-e100-Train_for_show_3796.ckpt"
 test_weights_name = "last"
 log_name = "loveda/{}".format(weights_name)
 monitor = "val_mIoU"
@@ -97,9 +99,9 @@ net = UNetMamba(
 )
 
 # define the loss
-# loss = UnetMambaLoss(ignore_index=ignore_index)
+loss = UnetMambaLoss(ignore_index=ignore_index)
 
-loss = PerceptualMambaLoss(ignore_index=ignore_index, aux_weight=0.4)
+# loss = PerceptualMambaLoss(ignore_index=ignore_index, aux_weight=0.4)
 
 use_aux_loss = True
 
@@ -127,7 +129,7 @@ def train_aug(img, mask):
     return img, mask
 
 
-train_dataset = LoveDATrainDataset(transform=train_aug)
+train_dataset = LoveDATrainDataset(transform=train_aug, data_root=data_root)
 
 val_dataset = loveda_val_dataset
 

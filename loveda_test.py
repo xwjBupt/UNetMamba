@@ -8,7 +8,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
-
+import os
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -29,44 +29,70 @@ def label2rgb(mask):
 
 
 def img_writer(inp):
-    (mask,  mask_id, rgb) = inp
+    (mask, mask_id, rgb) = inp
     if rgb:
-        mask_name_tif = mask_id + '.png'
+        mask_name_tif = mask_id + ".png"
         mask_tif = label2rgb(mask)
         mask_tif = cv2.cvtColor(mask_tif, cv2.COLOR_RGB2BGR)
         cv2.imwrite(mask_name_tif, mask_tif)
     else:
         mask_png = mask.astype(np.uint8)
-        mask_name_png = mask_id + '.png'
+        mask_name_png = mask_id + ".png"
         cv2.imwrite(mask_name_png, mask_png)
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     arg = parser.add_argument
-    arg("-c", "--config_path", type=Path, required=True, help="Path to config")
-    arg("-o", "--output_path", type=Path, help="Path where to save resulting masks.", required=True)
-    arg("-t", "--tta", help="Test time augmentation.", default=None, choices=[None, "d4", "lr"]) ## lr is flip TTA, d4 is multi-scale TTA
-    arg("--rgb", help="whether output rgb masks", action='store_true')
-    arg("--val", help="whether eval Val set", action='store_true')
+    arg(
+        "-c",
+        "--config_path",
+        type=Path,
+        default="/home/wjx/data/code/UNetMamba/config/loveda/unetmamba.py",
+        required=False,
+        help="Path to config",
+    )
+    arg(
+        "--o",
+        "--output_path",
+        type=Path,
+        default="/home/wjx/data/code/UNetMamba/config/loveda",
+        help="Path where to save resulting masks.",
+        required=False,
+    )
+    arg(
+        "-t",
+        "--tta",
+        help="Test time augmentation.",
+        default=None,
+        choices=[None, "d4", "lr"],
+    )  ## lr is flip TTA, d4 is multi-scale TTA
+    arg("--rgb", help="whether output rgb masks", default=True)
+    arg("--val", help="whether eval Val set", default=True)
     return parser.parse_args()
 
 
 def main():
     args = get_args()
     config = py2cfg(args.config_path)
-    args.output_path.mkdir(exist_ok=True, parents=True)
+    # args.output_path.mkdir(exist_ok=True, parents=True)
 
-    model = Supervision_Train.load_from_checkpoint(os.path.join(config.weights_path, config.test_weights_name+'.ckpt'), config=config)
+    # model = Supervision_Train.load_from_checkpoint(
+    #     os.path.join(config.weights_path, config.test_weights_name + ".ckpt"),
+    #     config=config,
+    # )
+
+    output_path = config.test_weights_path.replace("model_weights", "fig_results")
+    os.makedirs(output_path, exist_ok=True)
+    args.output_path = output_path
+    model = Supervision_Train.load_from_checkpoint(
+        config.test_weights_path,
+        config=config,
+    )
     model.cuda()
     model.eval()
     if args.tta == "lr":
-        transforms = tta.Compose(
-            [
-                tta.HorizontalFlip(),
-                tta.VerticalFlip()
-            ]
-        )
+        transforms = tta.Compose([tta.HorizontalFlip(), tta.VerticalFlip()])
         model = tta.SegmentationTTAWrapper(model, transforms)
     elif args.tta == "d4":
         transforms = tta.Compose(
@@ -74,7 +100,11 @@ def main():
                 tta.HorizontalFlip(),
                 # tta.VerticalFlip(),
                 # tta.Rotate90(angles=[0, 90, 180, 270]),
-                tta.Scale(scales=[0.75, 1.0, 1.25, 1.5], interpolation='bicubic', align_corners=False),
+                tta.Scale(
+                    scales=[0.75, 1.0, 1.25, 1.5],
+                    interpolation="bicubic",
+                    align_corners=False,
+                ),
                 # tta.Multiply(factors=[0.8, 1, 1.2])
             ]
         )
@@ -97,13 +127,13 @@ def main():
         results = []
         for input in tqdm(test_loader):
             # raw_prediction NxCxHxW
-            raw_predictions = model(input['img'].cuda())
+            raw_predictions = model(input["img"].cuda())
 
             image_ids = input["img_id"]
             if args.val:
-                masks_true = input['gt_semantic_seg']
+                masks_true = input["gt_semantic_seg"]
 
-            img_type = input['img_type']
+            img_type = input["img_type"]
 
             raw_predictions = nn.Softmax(dim=1)(raw_predictions)
             predictions = raw_predictions.argmax(dim=1)
@@ -115,23 +145,43 @@ def main():
                 if args.val:
                     if not os.path.exists(os.path.join(args.output_path, mask_type)):
                         os.mkdir(os.path.join(args.output_path, mask_type))
-                    evaluator.add_batch(pre_image=mask, gt_image=masks_true[i].cpu().numpy())
-                    results.append((mask, str(args.output_path / mask_type / mask_name), args.rgb))
+                    evaluator.add_batch(
+                        pre_image=mask, gt_image=masks_true[i].cpu().numpy()
+                    )
+                    results.append(
+                        (
+                            mask,
+                            os.path.join(args.output_path, mask_type, mask_name),
+                            args.rgb,
+                        )
+                    )
                 else:
-                    results.append((mask, str(args.output_path / mask_name), args.rgb))
+                    results.append(
+                        (mask, os.path.join(args.output_path, mask_name), args.rgb)
+                    )
     if args.val:
         iou_per_class = evaluator.Intersection_over_Union()
         f1_per_class = evaluator.F1()
         OA = evaluator.OA()
-        for class_name, class_iou, class_f1 in zip(config.classes, iou_per_class, f1_per_class):
-            print('mF1_{}:{}, IOU_{}:{}'.format(class_name, class_f1, class_name, class_iou))
-        print('mF1:{}, mIOU:{}, OA:{}'.format(np.nanmean(f1_per_class), np.nanmean(iou_per_class), OA))
+        for class_name, class_iou, class_f1 in zip(
+            config.classes, iou_per_class, f1_per_class
+        ):
+            print(
+                "mF1_{}:{}, IOU_{}:{}".format(
+                    class_name, class_f1, class_name, class_iou
+                )
+            )
+        print(
+            "mF1:{}, mIOU:{}, OA:{}".format(
+                np.nanmean(f1_per_class), np.nanmean(iou_per_class), OA
+            )
+        )
 
     t0 = time.time()
     mpp.Pool(processes=mp.cpu_count()).map(img_writer, results)
     t1 = time.time()
     img_write_time = t1 - t0
-    print('images writing spends: {} s'.format(img_write_time))
+    print("images writing spends: {} s".format(img_write_time))
 
 
 if __name__ == "__main__":

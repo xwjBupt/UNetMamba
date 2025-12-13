@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 root = "/home/wjx/data/code/UNetMamba"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 # training hparam
 max_epoch = 100
@@ -27,7 +27,7 @@ image_size = 1024
 crop_size = int(512 * float(image_size / 1024))
 
 
-desc = "PerceptualMambaLossInDynamicScaling"
+desc = "train_1024-T2"
 weights_name = "unetmamba-" + str(image_size) + "-e" + str(max_epoch) + "-" + desc
 log_name = "vaihingen/{}".format(weights_name)
 weights_path = "/home/wjx/data/code/UNetMamba/model_weights/vaihingen/{}".format(
@@ -140,7 +140,7 @@ def val_aug(img, mask):
 
 
 train_dataset = VaihingenDataset(
-    data_root="/home/wjx/data/dataset/RSS/Vaihingen/Vaihingen_1024/train_1024",
+    data_root="/home/wjx/data/dataset/RSS/Vaihingen/Vaihingen_1024/train_1024-T4",
     mode="train",
     mosaic_ratio=0.25,
     transform=train_aug,

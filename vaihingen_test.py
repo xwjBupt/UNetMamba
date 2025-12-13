@@ -76,8 +76,12 @@ def main():
     args = get_args()
     config = py2cfg(args.config_path)
     args.output_path.mkdir(exist_ok=True, parents=True)
+    # model = Supervision_Train.load_from_checkpoint(
+    #     os.path.join(config.weights_path, config.test_weights_name + ".ckpt"),
+    #     config=config,
+    # )
     model = Supervision_Train.load_from_checkpoint(
-        os.path.join(config.weights_path, config.test_weights_name + ".ckpt"),
+        os.path.join(config.weights_path, config.weights_name + ".ckpt"),
         config=config,
     )
     model.cuda()

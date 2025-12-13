@@ -179,7 +179,7 @@ def main():
         accelerator="auto",
         check_val_every_n_epoch=config.check_val_every_n_epoch,
         callbacks=[checkpoint_callback],
-        strategy="auto",
+        strategy="ddp",
         logger=logger,
     )
     trainer.fit(model=model, ckpt_path=config.resume_ckpt_path)
