@@ -8,7 +8,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
-
+import os
+from loguru import logger
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -52,22 +53,32 @@ def img_writer(inp):
 def get_args():
     parser = argparse.ArgumentParser()
     arg = parser.add_argument
-    arg("-c", "--config_path", type=Path, required=True, help="Path to  config")
     arg(
-        "-o",
-        "--output_path",
-        type=Path,
-        help="Path where to save resulting masks.",
+        "-tp",
+        "--test_weights_path",
+        type=str,
         required=True,
+        help="Path to trained weights",
+    )
+    arg(
+        "-c",
+        "--config_path",
+        type=Path,
+        default="/home/wjx/data/code/UNetMamba/config/vaihingen/unetmamba.py",
+        required=False,
+        help="Path to config",
     )
     arg(
         "-t",
         "--tta",
         help="Test time augmentation.",
-        default=None,
+        default="d4",
         choices=[None, "d4", "lr"],
-    )
-    arg("--rgb", help="whether output rgb images", action="store_true")
+    )  ## lr is flip TTA, d4 is multi-scale TTA
+    arg("--rgb", help="whether output rgb masks", default=True)
+    arg("--val", help="whether eval Val set", default=True)
+    return parser.parse_args()
+
     return parser.parse_args()
 
 
@@ -75,15 +86,19 @@ def main():
     seed_everything(42)
     args = get_args()
     config = py2cfg(args.config_path)
-    args.output_path.mkdir(exist_ok=True, parents=True)
-    # model = Supervision_Train.load_from_checkpoint(
-    #     os.path.join(config.weights_path, config.test_weights_name + ".ckpt"),
-    #     config=config,
-    # )
+    test_weights_path = args.test_weights_path
+    output_path = test_weights_path.replace("model_weights", "fig_results")
+    os.makedirs(output_path, exist_ok=True)
+    logger.add(os.path.join(output_path, "metric.log"))
     model = Supervision_Train.load_from_checkpoint(
-        os.path.join(config.weights_path, config.weights_name + ".ckpt"),
+        test_weights_path,
         config=config,
     )
+    model = Supervision_Train.load_from_checkpoint(
+        test_weights_path,
+        config=config,
+    )
+
     model.cuda()
     model.eval()
     evaluator = Evaluator(num_class=config.num_classes)
@@ -133,7 +148,7 @@ def main():
                     pre_image=mask, gt_image=masks_true[i].cpu().numpy()
                 )
                 mask_name = image_ids[i]
-                results.append((mask, str(args.output_path / mask_name), args.rgb))
+                results.append((mask, os.path.join(output_path, mask_name), args.rgb))
 
     iou_per_class = evaluator.Intersection_over_Union()
     f1_per_class = evaluator.F1()
@@ -141,8 +156,10 @@ def main():
     for class_name, class_iou, class_f1 in zip(
         config.classes, iou_per_class, f1_per_class
     ):
-        print("F1_{}:{}, IOU_{}:{}".format(class_name, class_f1, class_name, class_iou))
-    print(
+        logger.info(
+            "F1_{}:{}, IOU_{}:{}".format(class_name, class_f1, class_name, class_iou)
+        )
+    logger.info(
         "F1:{}, mIOU:{}, OA:{}".format(
             np.nanmean(f1_per_class[:-1]) * 100.0,
             np.nanmean(iou_per_class[:-1]) * 100.0,
@@ -153,7 +170,7 @@ def main():
     mpp.Pool(processes=mp.cpu_count()).map(img_writer, results)
     t1 = time.time()
     img_write_time = t1 - t0
-    print("images writing spends: {} s".format(img_write_time))
+    logger.info("images writing spends: {} s".format(img_write_time))
 
 
 if __name__ == "__main__":

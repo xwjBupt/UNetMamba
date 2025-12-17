@@ -11,3 +11,5 @@ r*.txt
 *.png
 fig_results/*
 nohup.out
+*.zip
+play*

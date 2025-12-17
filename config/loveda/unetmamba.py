@@ -8,7 +8,7 @@ from fvcore.nn import flop_count, parameter_count
 import copy
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 root = "/home/wjx/data/code/UNetMamba"
 # training hparam
 max_epoch = 100
@@ -29,7 +29,6 @@ weights_name = "unetmamba-" + str(image_size) + "-e" + str(max_epoch) + "-" + de
 weights_path = "/home/wjx/data/code/UNetMamba/model_weights/loveda/{}".format(
     weights_name
 )
-test_weights_path = "/home/wjx/data/code/UNetMamba/model_weights/loveda/unetmamba-384-e100-Train_for_show_3796/unetmamba-384-e100-Train_for_show_3796.ckpt"
 test_weights_name = "last"
 log_name = "loveda/{}".format(weights_name)
 monitor = "val_mIoU"

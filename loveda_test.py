@@ -12,6 +12,7 @@ import os
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from loguru import logger
 
 
 def label2rgb(mask):
@@ -45,6 +46,13 @@ def get_args():
     parser = argparse.ArgumentParser()
     arg = parser.add_argument
     arg(
+        "-tp",
+        "--test_weights_path",
+        type=str,
+        required=True,
+        help="Path to trained weights",
+    )
+    arg(
         "-c",
         "--config_path",
         type=Path,
@@ -53,18 +61,10 @@ def get_args():
         help="Path to config",
     )
     arg(
-        "--o",
-        "--output_path",
-        type=Path,
-        default="/home/wjx/data/code/UNetMamba/config/loveda",
-        help="Path where to save resulting masks.",
-        required=False,
-    )
-    arg(
         "-t",
         "--tta",
         help="Test time augmentation.",
-        default=None,
+        default="d4",
         choices=[None, "d4", "lr"],
     )  ## lr is flip TTA, d4 is multi-scale TTA
     arg("--rgb", help="whether output rgb masks", default=True)
@@ -75,20 +75,16 @@ def get_args():
 def main():
     args = get_args()
     config = py2cfg(args.config_path)
-    # args.output_path.mkdir(exist_ok=True, parents=True)
 
-    # model = Supervision_Train.load_from_checkpoint(
-    #     os.path.join(config.weights_path, config.test_weights_name + ".ckpt"),
-    #     config=config,
-    # )
-
-    output_path = config.test_weights_path.replace("model_weights", "fig_results")
+    test_weights_path = args.test_weights_path
+    output_path = test_weights_path.replace("model_weights", "fig_results")
     os.makedirs(output_path, exist_ok=True)
-    args.output_path = output_path
+    logger.add(os.path.join(output_path, "metric.log"))
     model = Supervision_Train.load_from_checkpoint(
-        config.test_weights_path,
+        test_weights_path,
         config=config,
     )
+
     model.cuda()
     model.eval()
     if args.tta == "lr":
@@ -143,21 +139,21 @@ def main():
                 mask_name = image_ids[i]
                 mask_type = img_type[i]
                 if args.val:
-                    if not os.path.exists(os.path.join(args.output_path, mask_type)):
-                        os.mkdir(os.path.join(args.output_path, mask_type))
+                    if not os.path.exists(os.path.join(output_path, mask_type)):
+                        os.mkdir(os.path.join(output_path, mask_type))
                     evaluator.add_batch(
                         pre_image=mask, gt_image=masks_true[i].cpu().numpy()
                     )
                     results.append(
                         (
                             mask,
-                            os.path.join(args.output_path, mask_type, mask_name),
+                            os.path.join(output_path, mask_type, mask_name),
                             args.rgb,
                         )
                     )
                 else:
                     results.append(
-                        (mask, os.path.join(args.output_path, mask_name), args.rgb)
+                        (mask, os.path.join(output_path, mask_name), args.rgb)
                     )
     if args.val:
         iou_per_class = evaluator.Intersection_over_Union()
@@ -166,12 +162,12 @@ def main():
         for class_name, class_iou, class_f1 in zip(
             config.classes, iou_per_class, f1_per_class
         ):
-            print(
+            logger.info(
                 "mF1_{}:{}, IOU_{}:{}".format(
                     class_name, class_f1, class_name, class_iou
                 )
             )
-        print(
+        logger.info(
             "mF1:{}, mIOU:{}, OA:{}".format(
                 np.nanmean(f1_per_class), np.nanmean(iou_per_class), OA
             )
@@ -181,7 +177,7 @@ def main():
     mpp.Pool(processes=mp.cpu_count()).map(img_writer, results)
     t1 = time.time()
     img_write_time = t1 - t0
-    print("images writing spends: {} s".format(img_write_time))
+    logger.info("images writing spends: {} s".format(img_write_time))
 
 
 if __name__ == "__main__":
