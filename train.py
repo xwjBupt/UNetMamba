@@ -76,27 +76,36 @@ class Supervision_Train(pl.LightningModule):
         return {"loss": loss}
 
     def on_train_epoch_end(self):
-        if "vaihingen" in self.config.log_name:
-            mIoU = np.nanmean(self.metrics_train.Intersection_over_Union()[:-1])
-            F1 = np.nanmean(self.metrics_train.F1()[:-1])
-        elif "potsdam" in self.config.log_name:
-            mIoU = np.nanmean(self.metrics_train.Intersection_over_Union()[:-1])
-            F1 = np.nanmean(self.metrics_train.F1()[:-1])
-        else:
-            mIoU = np.nanmean(self.metrics_train.Intersection_over_Union())
-            F1 = np.nanmean(self.metrics_train.F1())
+        # if "vaihingen" in self.config.log_name:
+        #     mIoU = np.nanmean(self.metrics_train.Intersection_over_Union()[:-1])
+        #     F1 = np.nanmean(self.metrics_train.F1()[:-1])
+        # elif "potsdam" in self.config.log_name:
+        #     mIoU = np.nanmean(self.metrics_train.Intersection_over_Union()[:-1])
+        #     F1 = np.nanmean(self.metrics_train.F1()[:-1])
+        # else:
+        #     mIoU = np.nanmean(self.metrics_train.Intersection_over_Union())
+        #     F1 = np.nanmean(self.metrics_train.F1())
 
-        OA = np.nanmean(self.metrics_train.OA())
+        # OA = np.nanmean(self.metrics_train.OA())
+        # iou_per_class = self.metrics_train.Intersection_over_Union()
+        # eval_value = {"mIoU": mIoU * 100.0, "F1": F1 * 100.0, "OA": OA * 100.0}
+        # logger.info("train:", eval_value)
+
         iou_per_class = self.metrics_train.Intersection_over_Union()
-        eval_value = {"mIoU": mIoU * 100.0, "F1": F1 * 100.0, "OA": OA * 100.0}
-        logger.info("train:", eval_value)
+        f1 = self.metrics_train.F1()
+        freq = self.metrics_train.confusion_matrix.sum(axis=1)
+        valid = freq > 0  # 该类在 GT 中出现过
+        mIoU = np.mean(iou_per_class[valid])
+        mF1 = np.mean(f1[valid])
+        OA = self.metrics_train.OA()
 
         iou_value = {}
         for class_name, iou in zip(self.config.classes, iou_per_class):
             iou_value[class_name] = iou * 100.0
-        logger.info(iou_value)
+        eval_value = {"mIoU": mIoU * 100.0, "F1": mF1 * 100.0, "OA": OA * 100.0}
+        logger.info("Train-epoch: {} IOU-PC:{} \n\n".format(eval_value, iou_value))
         self.metrics_train.reset()
-        log_dict = {"train_mIoU": mIoU, "train_F1": F1, "train_OA": OA}
+        log_dict = {"train_mIoU": mIoU, "train_F1": mF1, "train_OA": OA}
         self.log_dict(log_dict, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
@@ -111,28 +120,33 @@ class Supervision_Train(pl.LightningModule):
         return {"loss_val": loss_val}
 
     def on_validation_epoch_end(self):
-        if "vaihingen" in self.config.log_name:
-            mIoU = np.nanmean(self.metrics_val.Intersection_over_Union()[:-1])
-            F1 = np.nanmean(self.metrics_val.F1()[:-1])
-        elif "potsdam" in self.config.log_name:
-            mIoU = np.nanmean(self.metrics_val.Intersection_over_Union()[:-1])
-            F1 = np.nanmean(self.metrics_val.F1()[:-1])
-        else:
-            mIoU = np.nanmean(self.metrics_val.Intersection_over_Union())
-            F1 = np.nanmean(self.metrics_val.F1())
+        # if "vaihingen" in self.config.log_name:
+        #     mIoU = np.nanmean(self.metrics_val.Intersection_over_Union()[:-1])
+        #     F1 = np.nanmean(self.metrics_val.F1()[:-1])
+        # elif "potsdam" in self.config.log_name:
+        #     mIoU = np.nanmean(self.metrics_val.Intersection_over_Union()[:-1])
+        #     F1 = np.nanmean(self.metrics_val.F1()[:-1])
+        # else:
+        #     mIoU = np.nanmean(self.metrics_val.Intersection_over_Union())
+        #     F1 = np.nanmean(self.metrics_val.F1())
 
-        OA = np.nanmean(self.metrics_val.OA())
-        iou_per_class = self.metrics_val.Intersection_over_Union()
+        # OA = np.nanmean(self.metrics_val.OA())
+        # iou_per_class = self.metrics_val.Intersection_over_Union()
 
-        eval_value = {"mIoU": mIoU * 100.0, "F1": F1 * 100.0, "OA": OA * 100.0}
-        logger.info("val:", eval_value)
+        iou_per_class = self.metrics_train.Intersection_over_Union()
+        f1 = self.metrics_train.F1()
+        freq = self.metrics_train.confusion_matrix.sum(axis=1)
+        valid = freq > 0  # 该类在 GT 中出现过
+        mIoU = np.mean(iou_per_class[valid])
+        mF1 = np.mean(f1[valid])
+        OA = self.metrics_train.OA()
         iou_value = {}
         for class_name, iou in zip(self.config.classes, iou_per_class):
             iou_value[class_name] = iou * 100.0
-        logger.info(iou_value)
-
+        eval_value = {"mIoU": mIoU * 100.0, "F1": mF1 * 100.0, "OA": OA * 100.0}
+        logger.info("Val-epoch: {} IOU-PC:{} \n\n".format(eval_value, iou_value))
         self.metrics_val.reset()
-        log_dict = {"val_mIoU": mIoU, "val_F1": F1, "val_OA": OA}
+        log_dict = {"val_mIoU": mIoU, "val_F1": mF1, "val_OA": OA}
         self.log_dict(log_dict, prog_bar=True)
 
     def configure_optimizers(self):

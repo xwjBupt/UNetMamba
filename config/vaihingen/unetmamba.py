@@ -10,14 +10,14 @@ import numpy as np
 import torch
 
 root = "/home/wjx/data/code/UNetMamba"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 # training hparam
-max_epoch = 100
+max_epoch = 75
 ignore_index = len(CLASSES)
 train_batch_size = 32
 val_batch_size = 48
-lr = 6e-4
+lr = 8e-6
 weight_decay = 2.5e-4
 backbone_lr = 6e-5
 backbone_weight_decay = 2.5e-4
@@ -27,7 +27,7 @@ image_size = 384
 crop_size = int(512 * float(image_size / 1024))
 
 
-desc = "lr6e-4"
+desc = "lr8e-6"
 weights_name = (
     "newdatasetfinetue-unetmamba-"
     + str(image_size)
@@ -40,7 +40,7 @@ log_name = "vaihingen/{}".format(weights_name)
 weights_path = "/home/wjx/data/code/UNetMamba/model_weights/vaihingen/{}".format(
     weights_name
 )
-pretrained_ckpt_path = None  # "/home/wjx/data/code/UNetMamba/model_weights/vaihingen/unetmamba-384-e100-train_1024/unetmamba-384-e100-train_1024.ckpt"
+pretrained_ckpt_path = "/home/wjx/data/code/UNetMamba/model_weights/vaihingen/unetmamba-384-e100-train_1024/unetmamba-384-e100-train_1024.ckpt"
 monitor = "val_mIoU"
 monitor_mode = "max"
 save_top_k = 1

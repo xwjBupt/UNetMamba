@@ -87,7 +87,10 @@ def main():
     args = get_args()
     config = py2cfg(args.config_path)
     test_weights_path = args.test_weights_path
-    output_path = test_weights_path.replace("model_weights", "fig_results")
+    if args.tta:
+        output_path = test_weights_path.replace("model_weights", "fig_results")
+    else:
+        output_path = test_weights_path.replace("model_weights", "fig_results_NOTTA")
     os.makedirs(output_path, exist_ok=True)
     logger.add(os.path.join(output_path, "metric.log"))
     model = Supervision_Train.load_from_checkpoint(
