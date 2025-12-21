@@ -10,35 +10,44 @@ import numpy as np
 import torch
 
 root = "/home/wjx/data/code/UNetMamba"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 # training hparam
 max_epoch = 100
 ignore_index = len(CLASSES)
-train_batch_size = 8
-val_batch_size = 1
+train_batch_size = 32
+val_batch_size = 48
 lr = 6e-4
 weight_decay = 2.5e-4
 backbone_lr = 6e-5
 backbone_weight_decay = 2.5e-4
 num_classes = len(CLASSES)
 classes = CLASSES
-image_size = 1024
+image_size = 384
 crop_size = int(512 * float(image_size / 1024))
 
 
-desc = "train_1024-T2"
-weights_name = "unetmamba-" + str(image_size) + "-e" + str(max_epoch) + "-" + desc
+desc = "lr6e-4"
+weights_name = (
+    "newdatasetfinetue-unetmamba-"
+    + str(image_size)
+    + "-e"
+    + str(max_epoch)
+    + "-"
+    + desc
+)
 log_name = "vaihingen/{}".format(weights_name)
 weights_path = "/home/wjx/data/code/UNetMamba/model_weights/vaihingen/{}".format(
     weights_name
 )
+pretrained_ckpt_path = None  # "/home/wjx/data/code/UNetMamba/model_weights/vaihingen/unetmamba-384-e100-train_1024/unetmamba-384-e100-train_1024.ckpt"
 monitor = "val_mIoU"
 monitor_mode = "max"
 save_top_k = 1
 save_last = False
 check_val_every_n_epoch = 1
-pretrained_ckpt_path = None  # the path for the pretrained unetmamba weight
+
+# the path for the pretrained unetmamba weight
 gpus = "auto"  # default or gpu ids:[0] or gpu nums: 2, more setting can refer to pytorch_lightning
 resume_ckpt_path = None  # whether continue training with the checkpoint, default None
 
@@ -140,19 +149,33 @@ def val_aug(img, mask):
 
 
 train_dataset = VaihingenDataset(
-    data_root="/home/wjx/data/dataset/RSS/Vaihingen/Vaihingen_1024/train_1024-T4",
+    data_root="/home/wjx/data/dataset/RSS/Vaihingen/Vaihingen",
+    img_dir="images/training_cut1024",
+    mask_dir="annotations/training_cut1024",
+    img_suffix=".tif",
+    mask_suffix=".png",
     mode="train",
     mosaic_ratio=0.25,
     transform=train_aug,
 )
 
 val_dataset = VaihingenDataset(
-    data_root="/home/wjx/data/dataset/RSS/Vaihingen/Vaihingen_1024/test_1024",
+    data_root="/home/wjx/data/dataset/RSS/Vaihingen/Vaihingen",
+    img_dir="images/validation_cut1024",
+    mask_dir="annotations/validation_cut1024",
+    img_suffix=".tif",
+    mask_suffix=".png",
+    mode="val",
     transform=val_aug,
 )
 
 test_dataset = VaihingenDataset(
-    data_root="/home/wjx/data/dataset/RSS/Vaihingen/Vaihingen_1024/test_1024",
+    data_root="/home/wjx/data/dataset/RSS/Vaihingen/Vaihingen",
+    img_dir="images/validation_cut1024",
+    mask_dir="annotations/validation_cut1024",
+    img_suffix=".tif",
+    mask_suffix=".png",
+    mode="val",
     transform=val_aug,
 )
 
@@ -160,7 +183,7 @@ pin_memory = True
 train_loader = DataLoader(
     dataset=train_dataset,
     batch_size=train_batch_size,
-    num_workers=4,
+    num_workers=8,
     pin_memory=pin_memory,
     shuffle=True,
     drop_last=True,
@@ -169,7 +192,7 @@ train_loader = DataLoader(
 val_loader = DataLoader(
     dataset=val_dataset,
     batch_size=val_batch_size,
-    num_workers=4,
+    num_workers=8,
     shuffle=False,
     pin_memory=pin_memory,
     drop_last=False,

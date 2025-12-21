@@ -35,7 +35,7 @@ def get_args():
         "--config_path",
         type=Path,
         help="Path to the config.",
-        default="/home/wjx/data/code/UNetMamba/config/loveda/unetmamba.py",
+        default="/home/wjx/data/code/UNetMamba/config/vaihingen/unetmamba.py",
     )
     return parser.parse_args()
 

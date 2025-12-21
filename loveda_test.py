@@ -64,7 +64,7 @@ def get_args():
         "-t",
         "--tta",
         help="Test time augmentation.",
-        default="d4",
+        default=None,
         choices=[None, "d4", "lr"],
     )  ## lr is flip TTA, d4 is multi-scale TTA
     arg("--rgb", help="whether output rgb masks", default=True)
@@ -77,7 +77,7 @@ def main():
     config = py2cfg(args.config_path)
 
     test_weights_path = args.test_weights_path
-    output_path = test_weights_path.replace("model_weights", "fig_results")
+    output_path = test_weights_path.replace("model_weights", "fig_results_NOTTA")
     os.makedirs(output_path, exist_ok=True)
     logger.add(os.path.join(output_path, "metric.log"))
     model = Supervision_Train.load_from_checkpoint(

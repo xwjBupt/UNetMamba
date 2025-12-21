@@ -1,175 +1,80 @@
-import ttach as tta
-import multiprocessing.pool as mpp
-import multiprocessing as mp
-import time
-from train import *
-import argparse
-from pathlib import Path
-import cv2
-import numpy as np
-import torch
 import os
-from loguru import logger
-from torch import nn
-from torch.utils.data import DataLoader
-from tqdm import tqdm
+import numpy as np
+from PIL import Image
+
+# ====== 颜色映射：仅保留 0~5（6 类）======
+PALETTE_0_5 = np.array(
+    [
+        [255, 255, 255],  # 0 ImSurf
+        [255, 0, 0],  # 1 Building
+        [255, 255, 0],  # 2 LowVeg
+        [0, 255, 0],  # 3 Tree
+        [0, 255, 255],  # 4 Car
+        [0, 0, 255],  # 5 Clutter
+    ],
+    dtype=np.uint8,
+)
+
+BOUNDARY_LABEL = 6  # 你的 Boundary 类别值
+MERGE_TO_LABEL = 0  # 并入到背景/ImSurf
 
 
-def seed_everything(seed):
-    random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True
+def read_label(path: str) -> np.ndarray:
+    """
+    读取 label 图，支持 .png/.tif/.jpg/.npy
+    返回 (H, W) 的整型数组
+    """
+    ext = os.path.splitext(path)[1].lower()
 
-
-def label2rgb(mask):
-    h, w = mask.shape[0], mask.shape[1]
-    mask_rgb = np.zeros(shape=(h, w, 3), dtype=np.uint8)
-    mask_convert = mask[np.newaxis, :, :]
-    mask_rgb[np.all(mask_convert == 3, axis=0)] = [0, 255, 0]
-    mask_rgb[np.all(mask_convert == 0, axis=0)] = [255, 255, 255]
-    mask_rgb[np.all(mask_convert == 1, axis=0)] = [255, 0, 0]
-    mask_rgb[np.all(mask_convert == 2, axis=0)] = [255, 255, 0]
-    mask_rgb[np.all(mask_convert == 4, axis=0)] = [0, 204, 255]
-    mask_rgb[np.all(mask_convert == 5, axis=0)] = [0, 0, 255]
-    return mask_rgb
-
-
-def img_writer(inp):
-    (mask, mask_id, rgb) = inp
-    if rgb:
-        mask_name_tif = mask_id + ".png"
-        mask_tif = label2rgb(mask)
-        cv2.imwrite(mask_name_tif, mask_tif)
+    if ext == ".npy":
+        label = np.load(path)
     else:
-        mask_png = mask.astype(np.uint8)
-        mask_name_png = mask_id + ".png"
-        cv2.imwrite(mask_name_png, mask_png)
+        # 强制单通道读取，避免读成 RGB
+        label = Image.open(path).convert("L")
+        label = np.array(label)
+
+    if label.ndim != 2:
+        raise ValueError(f"label 必须是 (H,W)，当前 shape={label.shape}")
+
+    # 确保是整数类型
+    if not np.issubdtype(label.dtype, np.integer):
+        label = label.astype(np.int64)
+
+    return label
 
 
-def get_args():
-    parser = argparse.ArgumentParser()
-    arg = parser.add_argument
-    arg(
-        "-tp",
-        "--test_weights_path",
-        type=str,
-        required=True,
-        help="Path to trained weights",
-    )
-    arg(
-        "-c",
-        "--config_path",
-        type=Path,
-        default="/home/wjx/data/code/UNetMamba/config/vaihingen/unetmamba.py",
-        required=False,
-        help="Path to config",
-    )
-    arg(
-        "-t",
-        "--tta",
-        help="Test time augmentation.",
-        default="d4",
-        choices=[None, "d4", "lr"],
-    )  ## lr is flip TTA, d4 is multi-scale TTA
-    arg("--rgb", help="whether output rgb masks", default=True)
-    arg("--val", help="whether eval Val set", default=True)
-    return parser.parse_args()
-
-    return parser.parse_args()
+def merge_boundary_to_background(label: np.ndarray) -> np.ndarray:
+    """
+    将 Boundary(label=6) 并入到 MERGE_TO_LABEL(默认0)
+    """
+    out = label.copy()
+    out[out == BOUNDARY_LABEL] = MERGE_TO_LABEL
+    return out
 
 
-def main():
-    seed_everything(42)
-    args = get_args()
-    config = py2cfg(args.config_path)
-    test_weights_path = args.test_weights_path
-    output_path = test_weights_path.replace("model_weights", "fig_results")
-    os.makedirs(output_path, exist_ok=True)
-    logger.add(os.path.join(output_path, "metric.log"))
-    model = Supervision_Train.load_from_checkpoint(
-        test_weights_path,
-        config=config,
-    )
-    model = Supervision_Train.load_from_checkpoint(
-        test_weights_path,
-        config=config,
-    )
-
-    model.cuda()
-    model.eval()
-    evaluator = Evaluator(num_class=config.num_classes)
-    evaluator.reset()
-    if args.tta == "lr":
-        transforms = tta.Compose([tta.HorizontalFlip(), tta.VerticalFlip()])
-        model = tta.SegmentationTTAWrapper(model, transforms)
-    elif args.tta == "d4":
-        transforms = tta.Compose(
-            [
-                tta.HorizontalFlip(),
-                tta.VerticalFlip(),
-                tta.Rotate90(angles=[90]),
-                tta.Scale(
-                    scales=[0.5, 0.75, 1.0, 1.25, 1.5],
-                    interpolation="bicubic",
-                    align_corners=False,
-                ),
-            ]
+def label_to_rgb(label_0_5: np.ndarray) -> np.ndarray:
+    """
+    将 0~5 的 label 映射为 RGB
+    """
+    if label_0_5.min() < 0 or label_0_5.max() >= len(PALETTE_0_5):
+        raise ValueError(
+            f"label 超出 0~5 范围：min={label_0_5.min()}, max={label_0_5.max()}\n"
+            f"提示：如果你的 ignore 不是 6（比如 255），需要先把 ignore 映射走。"
         )
-        model = tta.SegmentationTTAWrapper(model, transforms)
+    return PALETTE_0_5[label_0_5]
 
-    test_dataset = config.test_dataset
 
-    with torch.no_grad():
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=1,
-            num_workers=4,
-            pin_memory=True,
-            drop_last=False,
-        )
-        results = []
-        for input in tqdm(test_loader):
-            # raw_prediction NxCxHxW
-            raw_predictions = model(input["img"].cuda())
-
-            image_ids = input["img_id"]
-            masks_true = input["gt_semantic_seg"]
-
-            raw_predictions = nn.Softmax(dim=1)(raw_predictions)
-            predictions = raw_predictions.argmax(dim=1)
-
-            for i in range(raw_predictions.shape[0]):
-                mask = predictions[i].cpu().numpy()
-                evaluator.add_batch(
-                    pre_image=mask, gt_image=masks_true[i].cpu().numpy()
-                )
-                mask_name = image_ids[i]
-                results.append((mask, os.path.join(output_path, mask_name), args.rgb))
-
-    iou_per_class = evaluator.Intersection_over_Union()
-    f1_per_class = evaluator.F1()
-    OA = evaluator.OA()
-    for class_name, class_iou, class_f1 in zip(
-        config.classes, iou_per_class, f1_per_class
-    ):
-        print("F1_{}:{}, IOU_{}:{}".format(class_name, class_f1, class_name, class_iou))
-    print(
-        "F1:{}, mIOU:{}, OA:{}".format(
-            np.nanmean(f1_per_class[:-1]) * 100.0,
-            np.nanmean(iou_per_class[:-1]) * 100.0,
-            OA * 100.0,
-        )
-    )
-    t0 = time.time()
-    mpp.Pool(processes=mp.cpu_count()).map(img_writer, results)
-    t1 = time.time()
-    img_write_time = t1 - t0
-    print("images writing spends: {} s".format(img_write_time))
+def save_rgb(rgb: np.ndarray, out_path: str):
+    Image.fromarray(rgb, mode="RGB").save(out_path)
 
 
 if __name__ == "__main__":
-    main()
+    in_path = "/home/wjx/data/dataset/RSS/Vaihingen/Vaihingen_1024/test_1024/masks/top_mosaic_09cm_area33_0_1.png"  # 改成你的输入路径（也可以是 label.npy）
+    out_path = "/home/wjx/data/code/UNetMamba/top_mosaic_09cm_area33_0_1_label_rgb.png"
+
+    label = read_label(in_path)
+    label = merge_boundary_to_background(label)  # ⭐ 关键：6 -> 0
+    rgb = label_to_rgb(label)  # 现在 label 必须只包含 0~5
+    save_rgb(rgb, out_path)
+
+    print("Saved:", out_path)

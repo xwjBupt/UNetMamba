@@ -72,7 +72,7 @@ def get_args():
         "-t",
         "--tta",
         help="Test time augmentation.",
-        default="d4",
+        default=None,
         choices=[None, "d4", "lr"],
     )  ## lr is flip TTA, d4 is multi-scale TTA
     arg("--rgb", help="whether output rgb masks", default=True)
